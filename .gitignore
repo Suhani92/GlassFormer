@@ -1,0 +1,13 @@
+# ROS 2 build artifacts
+build/
+install/
+log/
+.colcon/
+
+# Python artifacts
+**/__pycache__/
+*.pyc
+
+# Local IDE/OS files
+.vscode/
+.DS_Store
