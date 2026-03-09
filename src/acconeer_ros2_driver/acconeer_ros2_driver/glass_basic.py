@@ -2,58 +2,88 @@
 import rclpy
 from rclpy.node import Node
 from sensor_msgs.msg import Image, PointCloud2, CameraInfo
+from std_msgs.msg import Float32
 from cv_bridge import CvBridge
 import cv2
 import numpy as np
 import struct
-import math
+import message_filters
+
 
 class GlassFusionNode(Node):
     def __init__(self):
         super().__init__('glass_fusion_node')
 
+        # Topics
         self.depth_topic = '/camera/camera/depth/image_rect_raw'
         self.rgb_topic = '/camera/camera/color/image_raw'
-        self.cam_info_topic = '/camera/camera/depth/camera_info'
+        self.cam_info_topic = '/camera/camera/color/camera_info'
         self.radar_topic = '/acconeer/range_profile'
 
-        self.radar_fov_rad = np.deg2rad(40.0) 
-        self.glass_threshold_m = 0.1  # Depth > Radar + 0.1m = Glass threshold
-        
-        self.radar_min_intensity = 0.0 
+        # Parameters
+        self.declare_parameter('radar_fov_deg', 40.0)
+        self.declare_parameter('glass_threshold_m', 0.1)
+        self.radar_min_intensity = 0.0
 
+        # Camera info
+        self.cam_model = None
         self.create_subscription(CameraInfo, self.cam_info_topic, self.info_cb, 10)
-        self.create_subscription(Image, self.depth_topic, self.depth_cb, 10)
-        self.create_subscription(Image, self.rgb_topic, self.rgb_cb, 10)
-        self.create_subscription(PointCloud2, self.radar_topic, self.radar_cb, 10)
 
+        # Synchronization
+        self.rgb_sub = message_filters.Subscriber(self, Image, self.rgb_topic)
+        self.depth_sub = message_filters.Subscriber(self, Image, self.depth_topic)
+        self.radar_sub = message_filters.Subscriber(self, PointCloud2, self.radar_topic)
 
+        self.ts = message_filters.ApproximateTimeSynchronizer(
+            [self.rgb_sub, self.depth_sub, self.radar_sub],
+            queue_size=20,
+            slop=0.1
+        )
+        self.ts.registerCallback(self.sync_callback)
+
+        # Publishers
         self.pub_debug = self.create_publisher(Image, '/glass_detection/overlay', 10)
-        self.pub_repaired_depth = self.create_publisher(Image, '/camera/camera/depth/repaired', 10)
+        self.pub_mask = self.create_publisher(Image, '/glass_detection/mask', 10)
+
+        self.pub_crop_rgb = self.create_publisher(Image, '/glass_detection/cropped/rgb', 10)
+        self.pub_crop_overlay = self.create_publisher(Image, '/glass_detection/cropped/overlay', 10)
+        self.pub_crop_mask = self.create_publisher(Image, '/glass_detection/cropped/mask', 10)
+
+        # Distance publisher
+        self.pub_glass_distance = self.create_publisher(
+            Float32,
+            '/glass_detection/distance',
+            10
+        )
+
+        # NEW: Radar amplitude publisher
+        self.pub_radar_amplitude = self.create_publisher(
+            Float32,
+            '/glass_detection/radar_amplitude',
+            10
+        )
 
         self.cv_bridge = CvBridge()
-        self.cam_model = None
-        self.latest_radar_dist = None
-        self.latest_rgb = None
-        self.radar_active = False
 
     def info_cb(self, msg):
         if self.cam_model is None:
             self.cam_model = msg
-            self.get_logger().info("Camera Info Received.")
+            self.get_logger().info(
+                f"Camera Info Received (Frame: {msg.header.frame_id})"
+            )
 
-    def rgb_cb(self, msg):
-        try:
-            self.latest_rgb = self.cv_bridge.imgmsg_to_cv2(msg, "bgr8")
-        except Exception as e:
-            self.get_logger().warn(f"RGB Error: {e}")
+    def sync_callback(self, rgb_msg, depth_msg, radar_msg):
 
-    def radar_cb(self, msg):
-        self.radar_active = True
-        data = np.frombuffer(msg.data, dtype=np.uint8)
-        point_step = msg.point_step
-        num_points = msg.width
-        
+        # 1. Get parameters
+        radar_fov_deg = self.get_parameter('radar_fov_deg').value
+        glass_thresh = self.get_parameter('glass_threshold_m').value
+        radar_fov_rad = np.deg2rad(radar_fov_deg)
+
+        # 2. Process Radar
+        data = np.frombuffer(radar_msg.data, dtype=np.uint8)
+        point_step = radar_msg.point_step
+        num_points = radar_msg.width
+
         max_intensity = 0.0
         peak_dist = -1.0
 
@@ -66,76 +96,141 @@ class GlassFusionNode(Node):
                 max_intensity = intensity
                 peak_dist = x
 
-        self.get_logger().info(f"Max Radar Intensity: {max_intensity:.1f} at {peak_dist:.2f}m")
+        # Publish distance
+        dist_msg = Float32()
+        if max_intensity > self.radar_min_intensity and peak_dist > 0:
+            dist_msg.data = float(peak_dist)
+            self.get_logger().info(
+                f"Radar Dist: {peak_dist:.3f}m | Peak Amp: {max_intensity:.1f}"
+            )
+        else:
+            dist_msg.data = -1.0
+            self.get_logger().info(
+                "Radar: Scanning...", throttle_duration_sec=1.0
+            )
 
+        self.pub_glass_distance.publish(dist_msg)
+
+        # NEW: Publish radar amplitude
+        amp_msg = Float32()
         if max_intensity > self.radar_min_intensity:
-            self.latest_radar_dist = peak_dist
+            amp_msg.data = float(max_intensity)
         else:
-            self.latest_radar_dist = None
+            amp_msg.data = 0.0
 
-    def depth_cb(self, msg):
-        if self.latest_rgb is None:
-            return 
+        self.pub_radar_amplitude.publish(amp_msg)
 
-        debug_img = self.latest_rgb.copy()
-        h, w, _ = debug_img.shape
+        # 3. Process Images
+        try:
+            cv_rgb = self.cv_bridge.imgmsg_to_cv2(rgb_msg, "bgr8")
+            cv_depth = self.cv_bridge.imgmsg_to_cv2(
+                depth_msg, desired_encoding="passthrough"
+            )
+            debug_img = cv_rgb.copy()
+            h, w, _ = debug_img.shape
+        except Exception as e:
+            self.get_logger().error(f"Image Conversion Error: {e}")
+            return
 
-        status_color = (0, 0, 255) 
-        status_text = "Init..."
+        full_glass_mask = np.zeros((h, w), dtype=np.uint8)
+        x1, y1, x2, y2 = 0, 0, w, h
 
-        if not self.radar_active:
-            status_text = "WAITING FOR RADAR..."
-        elif self.latest_radar_dist is None:
-            status_color = (0, 255, 255) # Yellow
-            status_text = "Radar: Scanning (No Peak)"
-        else:
-            status_color = (0, 255, 0) # Green
-            status_text = f"Target: {self.latest_radar_dist:.2f}m"
+        # 4. Fusion Logic
+        if self.cam_model is not None and max_intensity > self.radar_min_intensity:
 
-        cv2.putText(debug_img, status_text, (10, 30), 
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.7, status_color, 2)
-
-        if self.cam_model is not None and self.latest_radar_dist is not None:
             try:
                 fx = self.cam_model.k[0]
-                fov_pixels = int((self.radar_fov_rad * fx)) 
-                center_x, center_y = w // 2, h // 2
+                cx = self.cam_model.k[2]
+                cy = self.cam_model.k[5]
+
+                center_x = int(cx)
+                center_y = int(cy)
+
+                fov_pixels = int(radar_fov_rad * fx)
+
                 x1 = max(0, center_x - fov_pixels // 2)
                 x2 = min(w, center_x + fov_pixels // 2)
                 y1 = max(0, center_y - fov_pixels // 2)
                 y2 = min(h, center_y + fov_pixels // 2)
 
-                cv2.rectangle(debug_img, (x1, y1), (x2, y2), (0, 255, 0), 2)
+                depth_m = cv_depth.astype(float) * 0.001
 
-                # glass criteria
-                cv_depth = self.cv_bridge.imgmsg_to_cv2(msg, desired_encoding="passthrough")
-                depth_m = cv_depth.astype(float) * 0.001 
-                depth_m = cv2.resize(depth_m, (w, h), interpolation=cv2.INTER_NEAREST)
-                
+                if depth_m.shape[:2] != (h, w):
+                    depth_m = cv2.resize(
+                        depth_m, (w, h), interpolation=cv2.INTER_NEAREST
+                    )
+
                 roi_depth = depth_m[y1:y2, x1:x2]
-                mask_invalid = (roi_depth == 0)
-                mask_penetrated = (roi_depth > (self.latest_radar_dist + self.glass_threshold_m))
-                glass_mask_roi = np.logical_or(mask_invalid, mask_penetrated)
 
-                full_glass_mask = np.zeros((h, w), dtype=np.uint8)
-                full_glass_mask[y1:y2, x1:x2] = glass_mask_roi.astype(np.uint8) * 255
-                
+                mask_penetrated = roi_depth > (peak_dist + glass_thresh)
+                mask_invalid = roi_depth == 0
+
+                glass_mask_roi = np.logical_or(mask_invalid, mask_penetrated)
+                glass_mask_roi = glass_mask_roi.astype(np.uint8) * 255
+
+                kernel = np.ones((5, 5), np.uint8)
+                glass_mask_roi = cv2.morphologyEx(
+                    glass_mask_roi, cv2.MORPH_OPEN, kernel
+                )
+                glass_mask_roi = cv2.morphologyEx(
+                    glass_mask_roi, cv2.MORPH_CLOSE, kernel
+                )
+
+                full_glass_mask[y1:y2, x1:x2] = glass_mask_roi
+
                 red_overlay = np.zeros_like(debug_img)
                 red_overlay[:] = (0, 0, 255)
-                
-                debug_img = np.where(full_glass_mask[..., None] > 0, 
-                                     cv2.addWeighted(debug_img, 0.7, red_overlay, 0.3, 0), 
-                                     debug_img)
+
+                debug_img = np.where(
+                    full_glass_mask[..., None] > 0,
+                    cv2.addWeighted(debug_img, 0.7, red_overlay, 0.3, 0),
+                    debug_img
+                )
+
+                cv2.putText(
+                    debug_img,
+                    f"Dist: {peak_dist:.2f}m | Amp: {max_intensity:.1f}",
+                    (10, 30),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    1.0,
+                    (0, 255, 0),
+                    2
+                )
+
+                cv2.rectangle(debug_img, (x1, y1), (x2, y2), (0, 255, 0), 2)
 
             except Exception as e:
-                self.get_logger().error(f"Error: {e}")
+                self.get_logger().error(f"Fusion Error: {e}")
 
+        # Publish full outputs
         debug_msg = self.cv_bridge.cv2_to_imgmsg(debug_img, "bgr8")
-        debug_msg.header.stamp = msg.header.stamp   # BEST: sync to depth
-        debug_msg.header.frame_id = msg.header.frame_id  # optional but good
+        debug_msg.header = rgb_msg.header
         self.pub_debug.publish(debug_msg)
 
-        # self.pub_debug.publish(self.cv_bridge.cv2_to_imgmsg(debug_img, "bgr8"))
+        mask_msg = self.cv_bridge.cv2_to_imgmsg(full_glass_mask, "mono8")
+        mask_msg.header = rgb_msg.header
+        self.pub_mask.publish(mask_msg)
+
+        # Publish cropped outputs
+        if x2 > x1 and y2 > y1:
+            crop_rgb_msg = self.cv_bridge.cv2_to_imgmsg(
+                cv_rgb[y1:y2, x1:x2], "bgr8"
+            )
+            crop_rgb_msg.header = rgb_msg.header
+            self.pub_crop_rgb.publish(crop_rgb_msg)
+
+            crop_overlay_msg = self.cv_bridge.cv2_to_imgmsg(
+                debug_img[y1:y2, x1:x2], "bgr8"
+            )
+            crop_overlay_msg.header = rgb_msg.header
+            self.pub_crop_overlay.publish(crop_overlay_msg)
+
+            crop_mask_msg = self.cv_bridge.cv2_to_imgmsg(
+                full_glass_mask[y1:y2, x1:x2], "mono8"
+            )
+            crop_mask_msg.header = rgb_msg.header
+            self.pub_crop_mask.publish(crop_mask_msg)
+
 
 def main(args=None):
     rclpy.init(args=args)
@@ -144,7 +239,6 @@ def main(args=None):
     node.destroy_node()
     rclpy.shutdown()
 
+
 if __name__ == '__main__':
     main()
-
-
