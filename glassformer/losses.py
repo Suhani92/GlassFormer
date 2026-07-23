@@ -1,9 +1,4 @@
-"""Segmentation losses and metrics for GlassFormer.
-
-The training objective combines binary cross-entropy with the Lovasz hinge loss
-(a direct surrogate for the IoU / Jaccard objective), following Section IV-B.3
-of the paper:  L = l_bce + l_lovasz.
-"""
+"""Segmentation losses and metrics for GlassFormer."""
 
 import torch
 import torch.nn as nn
