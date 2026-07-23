@@ -31,6 +31,7 @@
 <p align="center">
   <img src="assets/pipeline.jpg" width="90%" alt="Pipeline">
 </p>
+
 - **Radar-guided mask generation** — fuses mmWave range peaks with RGB-D depth
   inconsistencies to localize transparent-surface candidates in the image plane.
 - **GlassFormer** — a SegFormer-B2 network with lightweight `RadarAttention`
