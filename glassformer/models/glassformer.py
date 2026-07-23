@@ -7,7 +7,6 @@ embedding provides the query and the RGB features provide key/value. A learnable
 gate ``gamma`` controls how strongly the attention output modulates the RGB
 features, letting the network reject noisy radar priors.
 
-See Section IV-B of the paper.
 """
 
 import torch
