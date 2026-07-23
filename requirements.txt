@@ -1,0 +1,12 @@
+# GlassFormer ML dependencies (training / evaluation / model).
+# ROS2-side dependencies (rclpy, cv_bridge, message_filters, acconeer-exptool)
+# are handled separately — see ros2_ws/ and the README.
+
+torch>=2.0
+torchvision
+transformers>=4.30
+torchmetrics>=1.0
+albumentations>=1.4
+opencv-python
+numpy
+tqdm

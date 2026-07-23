@@ -1,13 +1,29 @@
-# ROS 2 build artifacts
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
 build/
-install/
-log/
-.colcon/
+dist/
+.venv/
+venv/
+env/
 
-# Python artifacts
-**/__pycache__/
-*.pyc
+# ROS2 build artifacts
+ros2_ws/build/
+ros2_ws/install/
+ros2_ws/log/
 
-# Local IDE/OS files
+# Model checkpoints / datasets / results (keep out of git)
+*.pt
+*.pth
+*.ckpt
+checkpoints/
+results/
+data/
+dataset/
+
+# Editor / OS
 .vscode/
+.idea/
 .DS_Store

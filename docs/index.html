@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GlassFormer: Real-time Glass Segmentation using Radar-Depth Fusion</title>
+<meta name="description" content="GlassFormer fuses millimeter-wave radar with RGB-D sensing for real-time transparent surface segmentation.">
+<style>
+  :root {
+    --fg: #1a1a1a; --muted: #666; --accent: #1f6feb; --bg: #ffffff; --card: #f6f8fa;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; color: var(--fg); background: var(--bg);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    line-height: 1.6;
+  }
+  .wrap { max-width: 880px; margin: 0 auto; padding: 0 20px; }
+  header { text-align: center; padding: 56px 20px 24px; }
+  h1 { font-size: 2.1rem; margin: 0 0 6px; }
+  h1 .sub { display: block; font-size: 1.15rem; font-weight: 500; color: var(--muted); margin-top: 8px; }
+  .authors { font-size: 1.05rem; margin: 18px 0 4px; }
+  .affil { color: var(--muted); font-size: 0.95rem; }
+  .venue { color: var(--accent); font-weight: 600; margin-top: 10px; }
+  .links { margin: 24px 0 8px; display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+  .links a {
+    display: inline-flex; align-items: center; gap: 8px; text-decoration: none;
+    background: var(--fg); color: #fff; padding: 10px 18px; border-radius: 999px;
+    font-size: 0.95rem; font-weight: 600; transition: opacity .15s;
+  }
+  .links a:hover { opacity: .82; }
+  section { padding: 28px 0; border-top: 1px solid #eee; }
+  h2 { font-size: 1.5rem; margin: 0 0 14px; }
+  p { margin: 0 0 14px; }
+  figure { margin: 20px 0; text-align: center; }
+  figure img { max-width: 100%; border-radius: 8px; border: 1px solid #eee; }
+  figcaption { color: var(--muted); font-size: 0.9rem; margin-top: 8px; }
+  table { width: 100%; border-collapse: collapse; font-size: 0.92rem; margin: 10px 0 20px; }
+  th, td { padding: 8px 10px; text-align: center; border-bottom: 1px solid #eee; }
+  th:first-child, td:first-child { text-align: left; }
+  tbody tr:last-child { font-weight: 700; background: var(--card); }
+  .cap { color: var(--muted); font-size: 0.9rem; margin-bottom: 6px; }
+  pre {
+    background: var(--card); border: 1px solid #eee; border-radius: 8px;
+    padding: 16px; overflow-x: auto; font-size: 0.85rem;
+  }
+  footer { text-align: center; color: var(--muted); font-size: 0.9rem; padding: 32px 20px 56px; }
+  .toc { background: var(--card); border-radius: 8px; padding: 14px 20px; }
+  .toc a { color: var(--accent); text-decoration: none; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap">
+    <h1>GlassFormer<span class="sub">Learning Real-time Glass Segmentation using Radar-Depth Fusion</span></h1>
+    <p class="authors">
+      Suhani Grover &middot; Astik Srivastava &middot; Viswas Dinesh &middot; Avinash Sharma &middot; Madhava Krishna
+    </p>
+    <p class="affil">Robotics Research Center, IIIT Hyderabad &nbsp;|&nbsp; IIT Jodhpur</p>
+    <p class="venue">IEEE/RSJ IROS 2026 (submitted)</p>
+
+    <div class="links">
+      <a href="#">📄 Paper</a>
+      <a href="https://github.com/Suhani92/GlassFormer">💻 Code</a>
+      <a href="#dataset">🗂️ Dataset</a>
+      <a href="#bibtex">📌 BibTeX</a>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <figure>
+    <img src="../assets/teaser.png" alt="GlassFormer teaser">
+    <figcaption>
+      An RGB-D camera and radar jointly observe the scene, producing a radar-guided
+      region prior that GlassFormer combines with the RGB image for accurate
+      transparent-surface segmentation — reliable even in low light.
+    </figcaption>
+  </figure>
+
+  <section class="toc">
+    <b>Outline</b> &nbsp;·&nbsp;
+    <a href="#abstract">Abstract</a> ·
+    <a href="#method">Method</a> ·
+    <a href="#results">Results</a> ·
+    <a href="#qualitative">Qualitative</a> ·
+    <a href="#dataset">Dataset</a> ·
+    <a href="#code">Code</a> ·
+    <a href="#bibtex">BibTeX</a>
+  </section>
+
+  <section id="abstract">
+    <h2>Abstract</h2>
+    <p>
+      Transparent surfaces are ubiquitous in built environments, yet they remain a
+      persistent failure case for robotic perception. RGB cameras perceive the
+      background behind glass rather than the surface itself, while depth sensors
+      such as LiDAR, time-of-flight, and RGB-D often return invalid or background
+      measurements in transparent regions.
+    </p>
+    <p>
+      We propose a multimodal framework that fuses millimetre-wave radar with RGB-D
+      sensing for real-time transparent surface segmentation. Radar reflects strongly
+      off glass surfaces, providing a geometric cue that remains reliable precisely
+      where vision and depth fail. We exploit this cross-modal inconsistency to
+      generate a radar-guided spatial prior, integrated into a lightweight
+      transformer-based segmentation network, <b>GlassFormer</b>, via cross-modal
+      attention. GlassFormer achieves <b>0.88 mIoU</b> on the mixed split and
+      <b>0.59 mIoU</b> on the low-light split, with real-time performance on
+      resource-constrained platforms.
+    </p>
+  </section>
+
+  <section id="method">
+    <h2>Method</h2>
+    <p>
+      A mmWave pulsed coherent radar estimates the range of dominant scene reflectors.
+      This range is projected into the image plane and fused with RGB-D depth
+      inconsistency cues to generate a coarse spatial prior localizing transparent
+      surface candidates. The prior is injected into a SegFormer-B2 backbone through a
+      cross-modal <b>RadarAttention</b> module that modulates deep semantic features
+      with range-conditioned spatial context.
+    </p>
+    <figure>
+      <img src="../assets/pipeline.png" alt="Radar-guided mask generation pipeline">
+      <figcaption>Radar-guided mask generation: range peak extraction → FoV projection →
+        depth-consistency filtering → binary transparency prior.</figcaption>
+    </figure>
+    <figure>
+      <img src="../assets/architecture.png" alt="GlassFormer architecture">
+      <figcaption>GlassFormer architecture: SegFormer encoder features fused with the
+        radar prior via RadarAttention at the two deepest stages, then decoded to a mask.</figcaption>
+    </figure>
+  </section>
+
+  <section id="results">
+    <h2>Results</h2>
+    <p class="cap">Well-lit (mixed) split</p>
+    <table>
+      <thead><tr><th>Method</th><th>mIoU ↑</th><th>MAE ↓</th><th>F-measure ↑</th><th>BER ↓</th></tr></thead>
+      <tbody>
+        <tr><td>GDNet</td><td>0.5485</td><td>0.2894</td><td>0.6951</td><td>0.2618</td></tr>
+        <tr><td>GlassSemNet</td><td>0.6336</td><td>0.1945</td><td>0.7769</td><td>–</td></tr>
+        <tr><td>SegFormer</td><td>0.8799</td><td>0.0938</td><td>0.9361</td><td>0.0517</td></tr>
+        <tr><td>Radar Overlay</td><td>0.4687</td><td>0.3474</td><td>0.6382</td><td>0.3348</td></tr>
+        <tr><td>GlassFormer (ours)</td><td>0.8818</td><td>0.0835</td><td>0.9372</td><td>0.0517</td></tr>
+      </tbody>
+    </table>
+
+    <p class="cap">Low-light split</p>
+    <table>
+      <thead><tr><th>Method</th><th>mIoU ↑</th><th>MAE ↓</th><th>F-measure ↑</th><th>BER ↓</th></tr></thead>
+      <tbody>
+        <tr><td>GDNet</td><td>0.4824</td><td>0.4031</td><td>0.682</td><td>0.3981</td></tr>
+        <tr><td>GlassSemNet</td><td>0.4623</td><td>0.3620</td><td>0.7010</td><td>–</td></tr>
+        <tr><td>SegFormer</td><td>0.4912</td><td>0.3588</td><td>0.6588</td><td>0.2819</td></tr>
+        <tr><td>Radar Overlay</td><td>0.5407</td><td>0.3148</td><td>0.7019</td><td>0.3097</td></tr>
+        <tr><td>GlassFormer (ours)</td><td>0.5904</td><td>0.2895</td><td>0.7424</td><td>0.2406</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section id="qualitative">
+    <h2>Qualitative comparison</h2>
+    <figure>
+      <img src="../assets/qualitative.png" alt="Qualitative comparison with state-of-the-art">
+      <figcaption>RGB · Ground Truth · Radar Overlay · GDNet · GlassSemNet · SegFormer · Ours.</figcaption>
+    </figure>
+  </section>
+
+  <section id="dataset">
+    <h2>Dataset</h2>
+    <p>
+      A synchronized RGB-D-radar dataset of 1800 annotated frames spanning glass doors,
+      windows, full-length walls, mirrors, tinted and partially occluded glass, captured
+      across lighting conditions from daylight to near-dark. Collected with an Acconeer
+      XM125 pulsed coherent radar rigidly mounted to an Intel RealSense D455 via a
+      3D-printed bracket. <em>Download link coming soon.</em>
+    </p>
+  </section>
+
+  <section id="code">
+    <h2>Code</h2>
+    <p>
+      Training, evaluation, the GlassFormer model, and an open-source ROS2 driver for the
+      Acconeer XM125 (with a real-time inference node) are available on
+      <a href="https://github.com/Suhani92/GlassFormer">GitHub</a>.
+    </p>
+  </section>
+
+  <section id="bibtex">
+    <h2>BibTeX</h2>
+<pre>@inproceedings{grover2026glassformer,
+  title     = {GlassFormer: Learning Real-time Glass Segmentation using Radar-Depth Fusion},
+  author    = {Grover, Suhani and Srivastava, Astik and Dinesh, Viswas and Sharma, Avinash and Krishna, Madhava},
+  booktitle = {IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS)},
+  year      = {2026}
+}</pre>
+  </section>
+
+</div>
+
+<footer>
+  Supported by IHub-Data (project M2-029). &nbsp;·&nbsp; Robotics Research Center, IIIT Hyderabad.
+</footer>
+
+</body>
+</html>
