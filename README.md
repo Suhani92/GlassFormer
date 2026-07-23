@@ -28,7 +28,9 @@
 ---
 
 ## Highlights
-
+<p align="center">
+  <img src="assets/pipeline.jpg" width="90%" alt="Pipeline">
+</p>
 - **Radar-guided mask generation** — fuses mmWave range peaks with RGB-D depth
   inconsistencies to localize transparent-surface candidates in the image plane.
 - **GlassFormer** — a SegFormer-B2 network with lightweight `RadarAttention`
@@ -40,6 +42,9 @@
 - Runs at **70.6 fps** on an RTX-4060 laptop GPU and **13.2 fps** CPU-only.
 
 ## Results
+<p align="center">
+  <img src="assets/qualitative.png" width="90%" alt="Qualitative Results">
+</p>
 
 **Well-lit (mixed) split**
 
