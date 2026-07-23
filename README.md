@@ -11,7 +11,7 @@
 </p>
 
 <p align="center">
-  <img src="assets/teaser.png" width="90%" alt="GlassFormer teaser">
+  <img src="assets/teaser.jpg" width="90%" alt="GlassFormer teaser">
 </p>
 
 > Transparent surfaces are a persistent failure case for robotic perception: RGB
