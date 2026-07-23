@@ -35,10 +35,13 @@
   figure { margin: 20px 0; text-align: center; }
   figure img { max-width: 100%; border-radius: 8px; border: 1px solid #eee; }
   figcaption { color: var(--muted); font-size: 0.9rem; margin-top: 8px; }
-  table { width: 100%; border-collapse: collapse; font-size: 0.92rem; margin: 10px 0 20px; }
-  th, td { padding: 8px 10px; text-align: center; border-bottom: 1px solid #eee; }
+  table { width: 100%; border-collapse: collapse; font-size: 0.92rem; margin: 10px 0 24px; }
+  thead th { background: #2d3748; color: #fff; font-weight: 600; }
+  th, td { padding: 9px 12px; text-align: center; border-bottom: 1px solid #eef0f3; }
   th:first-child, td:first-child { text-align: left; }
-  tbody tr:last-child { font-weight: 700; background: var(--card); }
+  tbody tr:nth-child(even) { background: #fafbfc; }
+  tbody tr:last-child { font-weight: 700; background: #eef4fd; box-shadow: inset 3px 0 0 var(--accent); }
+  tbody tr:last-child td:first-child { color: var(--accent); }
   .cap { color: var(--muted); font-size: 0.9rem; margin-bottom: 6px; }
   pre {
     background: var(--card); border: 1px solid #eee; border-radius: 8px;
@@ -58,7 +61,7 @@
       Suhani Grover &middot; Astik Srivastava &middot; Viswas Dinesh &middot; Avinash Sharma &middot; Madhava Krishna
     </p>
     <p class="affil">Robotics Research Center, IIIT Hyderabad &nbsp;|&nbsp; IIT Jodhpur</p>
-    <p class="venue">IEEE/RSJ IROS 2026 (submitted)</p>
+    <p class="venue">Accepted at IEEE/RSJ IROS 2026</p>
 
     <div class="links">
       <a href="#">📄 Paper</a>
